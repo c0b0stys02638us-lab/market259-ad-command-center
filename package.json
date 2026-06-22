@@ -1,0 +1,28 @@
+{
+  "name": "market259-ad-command-center",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "prisma": "prisma",
+    "seed": "ts-node --esm prisma/seed.ts"
+  },
+  "dependencies": {
+    "next": "13.4.12",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "@prisma/client": "5.6.0",
+    "axios": "1.4.0",
+    "qrcode": "1.5.1"
+  },
+  "devDependencies": {
+    "prisma": "5.6.0",
+    "tailwindcss": "3.4.7",
+    "autoprefixer": "10.4.14",
+    "postcss": "8.4.27",
+    "typescript": "5.2.2",
+    "ts-node": "10.9.1"
+  }
+}

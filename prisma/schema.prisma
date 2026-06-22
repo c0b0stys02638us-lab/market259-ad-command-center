@@ -1,0 +1,106 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String   @unique
+  role       Role     @default(TEAM_LEAD)
+  storeId    Int?     
+  createdAt  DateTime @default(now())
+}
+
+model Store {
+  id          Int      @id @default(autoincrement())
+  storeNumber Int      @unique
+  name        String
+  market      Int
+  createdAt   DateTime @default(now())
+}
+
+model Week {
+  id        Int      @id @default(autoincrement())
+  weekNumber Int
+  startDate DateTime
+  endDate   DateTime
+  theme     String?
+  createdAt DateTime @default(now())
+}
+
+model AdItem {
+  id             Int      @id @default(autoincrement())
+  weekId         Int
+  storeId        Int?
+  department     String
+  itemName       String
+  upc            String
+  featureLocation String
+  removed        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  Week  Week  @relation(fields: [weekId], references: [id])
+}
+
+model Submission {
+  id         Int      @id @default(autoincrement())
+  adItemId   Int
+  storeId    Int
+  weekId     Int
+  submitter  String
+  itemOnFeature Int
+  fullness     Int
+  signage      Int
+  priceShown   Int
+  rollbackFlag Int
+  modularHome  Int
+  photoCount   Int    @default(0)
+  score        Int?
+  notes        String?
+  createdAt    DateTime @default(now())
+
+  AdItem AdItem @relation(fields: [adItemId], references: [id])
+}
+
+model Photo {
+  id           Int      @id @default(autoincrement())
+  submissionId Int
+  url          String
+  uploadedBy   String?
+  createdAt    DateTime @default(now())
+
+  Submission Submission @relation(fields: [submissionId], references: [id])
+}
+
+model Suggestion {
+  id        Int      @id @default(autoincrement())
+  storeId   Int
+  weekId    Int?
+  itemName  String
+  upc       String?
+  dept      String?
+  notes     String?
+  status    SuggestionStatus @default(OPEN)
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  TEAM_LEAD
+  COACH
+  STORE_MANAGER
+  MARKET_MANAGER
+  AD_CHAMPION
+}
+
+enum SuggestionStatus {
+  OPEN
+  REVIEWED
+  ACCEPTED
+  REJECTED
+}
