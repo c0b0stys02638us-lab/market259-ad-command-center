@@ -1,21 +1,20 @@
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '../../lib/nextauth'
 import { NextApiRequest, NextApiResponse } from 'next'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
-import { prisma } from '../../../lib/prisma'
+import { prisma } from '../../lib/prisma'
 
-async function findUserFromReq(req: NextApiRequest){
-  const cookie = req.headers.cookie || ''
-  const tokenMatch = cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('session_token='))
-  if(!tokenMatch) return null
-  const token = tokenMatch.split('=')[1]
-  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } })
-  if(!session) return null
-  return session.user
+async function findUserFromSession(req: NextApiRequest, res: NextApiResponse){
+  const session = await getServerSession(req, res, authOptions)
+  if(!session || !session.user || !session.user.email) return null
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  return user
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' })
-  const user = await findUserFromReq(req)
+  const user = await findUserFromSession(req, res)
   if(!user) return res.status(401).json({ message: 'Unauthorized' })
 
   const { filename, contentType } = req.body
@@ -27,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' })
-    const Key = `photos/${Date.now()}-${filename}`
+    const Key = `photos/${user.id}/${Date.now()}-${filename}`
     const command = new PutObjectCommand({
       Bucket: process.env.NEXT_PUBLIC_S3_BUCKET,
       Key,

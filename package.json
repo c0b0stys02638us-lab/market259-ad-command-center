@@ -18,7 +18,8 @@
     "qrcode": "1.5.1",
     "@aws-sdk/client-s3": "3.448.0",
     "@aws-sdk/s3-request-presigner": "3.448.0",
-    "uuid": "9.0.0"
+    "uuid": "9.0.0",
+    "next-auth": "4.22.1"
   },
   "devDependencies": {
     "prisma": "5.6.0",

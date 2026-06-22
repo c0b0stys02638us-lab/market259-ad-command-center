@@ -1,21 +1,20 @@
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '../../lib/nextauth'
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
 import { computeScore } from '../../lib/scoring'
 
-async function findUserFromReq(req: NextApiRequest){
-  const cookie = req.headers.cookie || ''
-  const tokenMatch = cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('session_token='))
-  if(!tokenMatch) return null
-  const token = tokenMatch.split('=')[1]
-  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } })
-  if(!session) return null
-  return session.user
+async function findUserFromSession(req: NextApiRequest, res: NextApiResponse){
+  const session = await getServerSession(req, res, authOptions)
+  if(!session || !session.user || !session.user.email) return null
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  return user
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse){
   if(req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' })
   try{
-    const user = await findUserFromReq(req)
+    const user = await findUserFromSession(req, res)
     if(!user) return res.status(401).json({ message: 'Unauthorized' })
 
     const body = req.body
