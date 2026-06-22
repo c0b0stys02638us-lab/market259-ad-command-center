@@ -2,11 +2,24 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
 import { computeScore } from '../../lib/scoring'
 
+async function findUserFromReq(req: NextApiRequest){
+  const cookie = req.headers.cookie || ''
+  const tokenMatch = cookie.split(';').map(c=>c.trim()).find(c=>c.startsWith('session_token='))
+  if(!tokenMatch) return null
+  const token = tokenMatch.split('=')[1]
+  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } })
+  if(!session) return null
+  return session.user
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse){
   if(req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' })
   try{
+    const user = await findUserFromReq(req)
+    if(!user) return res.status(401).json({ message: 'Unauthorized' })
+
     const body = req.body
-    const storeNumber = Number(body.storeNumber || 259)
+    const storeNumber = Number(body.storeNumber || user.storeId || 259)
     const store = await prisma.store.findUnique({ where: { storeNumber } })
     let storeId = store?.id
     if(!storeId){
@@ -36,7 +49,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       adItemId: adItemId,
       storeId,
       weekId: Number(body.weekNumber || 21),
-      submitter: body.submitter || 'unknown',
+      submitter: body.submitter || user.name || 'unknown',
       itemOnFeature: mapToInt(body.itemOnFeature),
       fullness: mapFullnessToInt(body.fullness),
       signage: mapToInt(body.signage),
@@ -50,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Create photo records if URLs provided
     if(Array.isArray(body.photoURLs) && body.photoURLs.length > 0){
-      const photosData = body.photoURLs.map((u:string)=>({ submissionId: submission.id, url: u }))
+      const photosData = body.photoURLs.map((u:string)=>({ submissionId: submission.id, url: u, uploadedBy: user.email }))
       await prisma.photo.createMany({ data: photosData })
     }
 

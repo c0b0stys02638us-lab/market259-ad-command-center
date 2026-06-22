@@ -1,4 +1,3 @@
-// prisma/seed.ts
 import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
@@ -11,6 +10,17 @@ async function main(){
       storeNumber: 259,
       name: 'Walmart Store 259',
       market: 259
+    }
+  })
+
+  // create a market manager user for initial testing
+  await prisma.user.upsert({
+    where: { email: 'market.manager@market259.local' },
+    update: {},
+    create: {
+      name: 'Market Manager',
+      email: 'market.manager@market259.local',
+      role: 'MARKET_MANAGER'
     }
   })
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const initial = {
   storeNumber: 259,
@@ -22,6 +22,12 @@ export default function Submit(){
   const [loading,setLoading] = useState(false)
   const [message,setMessage] = useState('')
   const [files,setFiles] = useState<FileList | null>(null)
+  const [user,setUser] = useState<any>(null)
+  const [auth, setAuth] = useState({ email: '', name: '', role: 'TEAM_LEAD' })
+
+  useEffect(()=>{
+    fetch('/api/auth/me').then(r=>r.json()).then(d=>{ if(d.user) setUser(d.user) })
+  },[])
 
   async function uploadFile(file: File){
     // Request presigned URL from server
@@ -41,6 +47,7 @@ export default function Submit(){
 
   async function handleSubmit(e:any){
     e.preventDefault()
+    if(!user){ setMessage('Please sign in before submitting'); return }
     setLoading(true)
     setMessage('')
     try{
@@ -55,6 +62,7 @@ export default function Submit(){
 
       const payload = {
         ...form,
+        submitter: user.name,
         photoCount: uploadedURLs.length,
         photoURLs: uploadedURLs
       }
@@ -74,10 +82,55 @@ export default function Submit(){
     }finally{ setLoading(false) }
   }
 
+  async function handleLogin(e:any){
+    e.preventDefault()
+    const resp = await fetch('/api/auth/login', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(auth) })
+    const data = await resp.json()
+    if(resp.ok){
+      setUser(data.user)
+      setMessage('Signed in')
+    }else{
+      setMessage(data.message || 'Sign in failed')
+    }
+  }
+
+  async function handleLogout(){
+    await fetch('/api/auth/logout', { method: 'POST' })
+    setUser(null)
+    setMessage('Signed out')
+  }
+
   return (
     <div className="min-h-screen p-6 bg-neutralLight">
       <div className="max-w-xl mx-auto">
         <h2 className="text-2xl font-semibold text-walmartBlue">Submit Ad Check</h2>
+
+        <div className="mt-3 bg-white p-3 rounded shadow">
+          {!user ? (
+            <form onSubmit={handleLogin} className="grid grid-cols-1 gap-2">
+              <div className="text-sm text-neutralGray">Sign in to submit (creates a lightweight session for this device)</div>
+              <input placeholder="Name" value={auth.name} onChange={e=>setAuth({...auth, name: e.target.value})} className="border p-2 rounded" />
+              <input placeholder="Email" value={auth.email} onChange={e=>setAuth({...auth, email: e.target.value})} className="border p-2 rounded" />
+              <select value={auth.role} onChange={e=>setAuth({...auth, role: e.target.value})} className="border p-2 rounded">
+                <option value="TEAM_LEAD">Team Lead</option>
+                <option value="COACH">Coach</option>
+                <option value="STORE_MANAGER">Store Manager</option>
+                <option value="MARKET_MANAGER">Market Manager</option>
+                <option value="AD_CHAMPION">Ad Champion</option>
+              </select>
+              <div className="flex justify-end"><button className="bg-walmartBlue text-white px-3 py-1 rounded">Sign in</button></div>
+            </form>
+          ) : (
+            <div className="flex justify-between items-center">
+              <div>
+                <div className="font-medium">Signed in as {user.name}</div>
+                <div className="text-sm text-neutralGray">{user.email} — {user.role}</div>
+              </div>
+              <div><button onClick={handleLogout} className="text-walmartBlue">Sign out</button></div>
+            </div>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit} className="mt-4 space-y-3 bg-white p-4 rounded shadow">
           <div>
             <label className="block text-sm font-medium">Store Number</label>
