@@ -1,11 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next'
 import { prisma } from '../../lib/prisma'
+import { computeScore } from '../../lib/scoring'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse){
   if(req.method !== 'POST') return res.status(405).json({ message: 'Method not allowed' })
   try{
     const body = req.body
-    // Basic mapping - in a real app validate fields and map enums
     const storeNumber = Number(body.storeNumber || 259)
     const store = await prisma.store.findUnique({ where: { storeNumber } })
     let storeId = store?.id
@@ -14,29 +14,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       storeId = s.id
     }
 
-    // Find ad item if exists by upc & week
-    let adItem = null
+    const photoCount = body.photoCount ? Number(body.photoCount) : 0
+    const score = computeScore({
+      itemOnFeature: body.itemOnFeature,
+      fullness: body.fullness,
+      signage: body.signage,
+      priceShown: body.priceShown,
+      rollbackFlag: body.rollbackFlag,
+      modularHome: body.modularHome,
+      photoCount
+    })
+
+    let adItemId = 0
     if(body.upc){
-      adItem = await prisma.adItem.findFirst({ where: { upc: body.upc, weekId: undefined } })
+      const found = await prisma.adItem.findFirst({ where: { upc: body.upc } })
+      if(found) adItemId = found.id
     }
 
-    // Create a minimal submission record
+    // Create submission
     const submission = await prisma.submission.create({ data: {
-      adItemId: adItem?.id ?? 0,
+      adItemId: adItemId,
       storeId,
       weekId: Number(body.weekNumber || 21),
       submitter: body.submitter || 'unknown',
-      itemOnFeature: mapBool(body.itemOnFeature),
-      fullness: mapFullness(body.fullness),
-      signage: mapBool(body.signage),
-      priceShown: mapPrice(body.priceShown),
-      rollbackFlag: mapBool(body.rollbackFlag),
-      modularHome: mapBool(body.modularHome),
+      itemOnFeature: mapToInt(body.itemOnFeature),
+      fullness: mapFullnessToInt(body.fullness),
+      signage: mapToInt(body.signage),
+      priceShown: mapPriceToInt(body.priceShown),
+      rollbackFlag: mapToInt(body.rollbackFlag),
+      modularHome: mapToInt(body.modularHome),
+      photoCount: photoCount,
+      score: score,
       notes: body.notes || ''
-    }}).catch(e => {
-      console.error('submission create error', e)
-      return null
-    })
+    }})
+
+    // Create photo records if URLs provided
+    if(Array.isArray(body.photoURLs) && body.photoURLs.length > 0){
+      const photosData = body.photoURLs.map((u:string)=>({ submissionId: submission.id, url: u }))
+      await prisma.photo.createMany({ data: photosData })
+    }
 
     return res.status(200).json({ message: 'Submission received', submission })
   }catch(err){
@@ -45,25 +61,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-function mapBool(v:any){
-  if(!v) return 0
-  if(v === 'yes') return 1
-  if(v === 'no') return 0
-  if(v === 'partial') return 2
-  if(v === 'na') return -1
+function mapToInt(v:any){
+  if(v === undefined || v === null) return 0
+  const s = String(v).toLowerCase()
+  if(s === 'yes') return 1
+  if(s === 'no') return 0
+  if(s === 'partial') return 2
+  if(s === 'na' || s === 'n/a') return -1
   return 0
 }
-function mapFullness(v:any){
-  if(!v) return 0
-  if(v === 'full') return 2
-  if(v === 'partial') return 1
-  if(v === 'no') return 0
+function mapFullnessToInt(v:any){
+  if(v === undefined || v === null) return 0
+  const s = String(v).toLowerCase()
+  if(s === 'full') return 2
+  if(s === 'partial') return 1
+  if(s === 'no') return 0
+  if(s === 'na' || s === 'n/a') return -1
   return 0
 }
-function mapPrice(v:any){
-  if(!v) return 0
-  if(v === 'yes') return 2
-  if(v === 'no') return 0
-  if(v === 'na') return -1
+function mapPriceToInt(v:any){
+  if(v === undefined || v === null) return 0
+  const s = String(v).toLowerCase()
+  if(s === 'yes') return 2
+  if(s === 'no') return 0
+  if(s === 'na' || s === 'n/a') return -1
   return 0
 }

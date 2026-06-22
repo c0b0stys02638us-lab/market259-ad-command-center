@@ -21,23 +21,56 @@ export default function Submit(){
   const [form,setForm] = useState(initial)
   const [loading,setLoading] = useState(false)
   const [message,setMessage] = useState('')
+  const [files,setFiles] = useState<FileList | null>(null)
+
+  async function uploadFile(file: File){
+    // Request presigned URL from server
+    const resp = await fetch('/api/photos/presign', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, contentType: file.type })
+    })
+    if(!resp.ok) throw new Error('Could not get presign')
+    const data = await resp.json()
+    const uploadUrl = data.url
+    // Upload directly to S3 using PUT
+    const put = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })
+    if(!put.ok) throw new Error('Upload failed')
+    return data.publicUrl
+  }
 
   async function handleSubmit(e:any){
     e.preventDefault()
     setLoading(true)
     setMessage('')
     try{
+      const uploadedURLs:string[] = []
+      if(files && files.length > 0){
+        for(let i=0;i<files.length;i++){
+          const f = files[i]
+          const url = await uploadFile(f)
+          uploadedURLs.push(url)
+        }
+      }
+
+      const payload = {
+        ...form,
+        photoCount: uploadedURLs.length,
+        photoURLs: uploadedURLs
+      }
+
       const resp = await fetch('/api/submissions', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       })
       const data = await resp.json()
       setMessage(data.message || 'Submitted')
       setForm(initial)
-    }catch(err){
+      setFiles(null)
+    }catch(err:any){
       console.error(err)
-      setMessage('Error submitting')
+      setMessage(err.message || 'Error submitting')
     }finally{ setLoading(false) }
   }
 
@@ -120,8 +153,8 @@ export default function Submit(){
 
           <div>
             <label className="block text-sm font-medium">Customer-facing photo upload</label>
-            <input type="file" accept="image/*" className="mt-1" />
-            <p className="text-xs text-neutralGray mt-1">Photo upload uses presigned S3 URLs (configure in env).</p>
+            <input type="file" accept="image/*" multiple onChange={e=>setFiles(e.target.files)} className="mt-1" />
+            <p className="text-xs text-neutralGray mt-1">Photos will be uploaded directly to S3 (configure AWS keys and bucket in .env)</p>
           </div>
 
           <div>
